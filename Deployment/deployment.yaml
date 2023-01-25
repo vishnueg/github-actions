@@ -1,0 +1,94 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: initsetupscript
+  namespace: squirrel-operator
+  labels:
+    app: initsetupscript
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: initsetupscript
+  template:
+    metadata:
+      labels:
+        app: initsetupscript
+    spec:
+      containers:
+      - name: initsetupscript
+        image: sarveshdockerrepo/initsetupscript:0.3.0
+        ports:
+          - containerPort: 8082
+        volumeMounts: 
+        - name: rasp-pi-edge-initsetupscript
+          mountPath: "/initScripts/rasp-pi-edge"
+        - name: jetson-edge-initsetupscript
+          mountPath: "/initScripts/jetson-edge"
+        - name: rasp-pi-edge-regular-usecase
+          mountPath: "/usecase/rasp-pi-edge/regular-uc"
+        - name: rasp-pi-edge-football-usecase
+          mountPath: "/usecase/rasp-pi-edge/football-uc"
+        - name: server-config
+          mountPath: "/config"
+        - name: jetson-edge-regular-usecase
+          mountPath: "/usecase/jetson-edge/regular-uc"
+        - name: jetson-edge-football-usecase
+          mountPath: "/usecase/jetson-edge/football-uc"
+      volumes:
+      - name: rasp-pi-edge-initsetupscript
+        projected:
+          defaultMode: 511
+          sources: 
+          - configMap:
+              name: rasp-pi-edge-init
+      - name: jetson-edge-initsetupscript
+        projected:
+          defaultMode: 511
+          sources: 
+          - configMap:
+              name: jetson-edge-init
+      - name: rasp-pi-edge-regular-usecase
+        projected:
+          defaultMode: 511
+          sources: 
+          - configMap:
+              name: rasp-pi-edge-regular-usecase
+      - name: rasp-pi-edge-football-usecase
+        projected:
+          defaultMode: 511
+          sources: 
+          - configMap:
+              name: rasp-pi-edge-football-usecase
+      - name: server-config
+        projected:
+          defaultMode: 511
+          sources: 
+          - configMap:
+              name: initsetupscript-server-config
+          - secret:
+              name: initsetupscript-sever-secrets
+      - name: jetson-edge-regular-usecase
+        projected:
+          defaultMode: 511
+          sources: 
+          - configMap:
+              name: jetson-edge-regular-usecase
+      - name: jetson-edge-football-usecase
+        projected:
+          defaultMode: 511
+          sources: 
+          - configMap:
+              name: jetson-edge-football-usecase
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: initsetupscript-service
+  namespace: squirrel-operator
+spec:
+  selector:
+      app: initsetupscript
+  ports:
+    - port: 8082

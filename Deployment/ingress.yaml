@@ -1,0 +1,61 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: initsetupscript-ingress
+  namespace: squirrel-operator
+  annotations:
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: squirrel-operator.difinative.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/raspinitscript"
+        backend:
+          service:
+            name: initsetupscript-service
+            port:
+              number: 8082
+      - pathType: Prefix
+        path: "/jetsoninitscript"
+        backend:
+          service:
+            name: initsetupscript-service
+            port:
+              number: 8082
+      - pathType: Prefix
+        path: "/hostname/"
+        backend:
+          service:
+            name: initsetupscript-service
+            port:
+              number: 8082
+      - pathType: Prefix
+        path: "/raspiusecase/"
+        backend:
+          service:
+            name: initsetupscript-service
+            port:
+              number: 8082
+      - pathType: Prefix
+        path: "/tar"
+        backend:
+          service:
+            name: initsetupscript-service
+            port:
+              number: 8082
+      - pathType: Prefix
+        path: "/usecase"
+        backend:
+          service:
+            name: initsetupscript-service
+            port:
+              number: 8082
+      - pathType: Prefix
+        path: "/jetsonusecase/"
+        backend:
+          service:
+            name: initsetupscript-service
+            port:
+              number: 8082

@@ -1,0 +1,174 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jetson-edge-init
+  namespace: squirrel-operator
+data:
+  # first boot script //Not needed
+  oneboot.sh: |
+    #!/bin/bash
+    #oneboot.sh
+    echo "***************************** Executing oneboot.sh *****************************"
+    echo "Getting hostname"
+    EDGEHOSTNAME=`printf  DE00; echo $RANDOM | md5sum | head -c 4; echo ;`
+    echo $EDGEHOSTNAME
+    echo "Updating the hostname"
+    sed -i '/127\.0\.1\.1/d;' /etc/hosts
+    echo $EDGEHOSTNAME > /etc/hostname
+    hostnamectl set-hostname $EDGEHOSTNAME
+    echo "updating /etc/hosts file"
+    echo "127.0.1.1 $EDGEHOSTNAME" >> etc/hosts
+    rm -rf /var/lib/teleport/*
+    systemctl enable teleport
+    sleep 2
+    systemctl restart teleport
+    systemctl enable ssh
+    sleep 3
+    systemctl restart ssh
+    #rm -rf /root/jetson-edge-pub
+    sleep 5
+    wget --timeout=1 --tries=3 http://squirrel-operator.difinative.com/jetsoninitscript -O script.tar
+    file /root/script.tar | grep -q 'tar archive'
+    if [ $? == 0 ] ; then
+      echo "extracting script file from script.tar"
+      tar -xvf /root/script.tar
+      if [[ -f "/root/jetson-edge/twoboot.sh" ]] ; then
+        echo "Copying twoboot to /usr/bin"
+        cp /root/jetson-edge/twoboot.sh /usr/bin
+        chmod a+x /usr/bin/twoboot.sh
+      else  
+        echo "no twoboot.sh file"
+        sleep 5
+        /sbin/reboot
+      fi
+      if [[ -f "/root/jetson-edge/checkMyUsecase.sh" ]] ; then
+        echo "copying checkMyUsecase to /usr/bin"
+        cp /root/jetson-edge/checkMyUsecase.sh /usr/bin
+        chmod a+x /usr/bin/checkMyUsecase.sh
+      else  
+        echo "no checkMyUsecase.sh file"
+        sleep 5
+        /sbin/reboot
+      fi    
+      sleep 3
+      sed -i 's/oneboot/twoboot/' /var/spool/cron/crontabs/root
+      cp /root/jetson-edge/health.sh  /etc/health/ ; cd /etc/health ; shc -f health.sh ; cp health.sh.x /usr/bin/health
+      rm -rf /root/jetson-edge
+      touch /var/tmp/oneboot.done
+      rm -rf /root/script.tar
+    else
+      echo "script.tar is not downloaded properly"
+      sleep 2
+      /sbin/reboot
+    fi
+    /sbin/reboot
+    echo "***************************** Successfully completed oneboot.sh******************************"
+  
+  # second boot script //later
+  twoboot.sh: |
+    #!/bin/bash
+    #twoboot.sh
+    echo "************************************ Executing twoboot.sh ***************************************************"
+    echo "Sleeping for 5 sec"
+    sleep 5
+    echo "Checking if oneboot.done is there"
+    if [ -f /var/tmp/oneboot.done ] ; then
+      echo "Getting mac-id"
+      MACIDWLAN=$(cat /sys/class/net/wlan0/address | sed s/:/-/g)
+      echo "mac-id $MACIDWLAN"
+      echo "sleep for 10 sec"
+      sleep 10
+      echo "Getting host name"
+      wget --timeout=1 --tries=2 http://squirrel-operator.difinative.com/hostname/$MACIDWLAN -O api-hostname.sh
+      if [ $? == 0 ] ; then
+        echo "extracting hostname from api-hostname.sh"
+        EDGEHOSTNAME=$(cat api-hostname.sh | awk -F: '{print $2}' |sed 's/"//g '| sed s/\}//)
+        echo $EDGEHOSTNAME
+        echo "updating hostname"
+        echo $EDGEHOSTNAME > /etc/hostname
+        hostnamectl set-hostname $EDGEHOSTNAME  
+        echo "updating etc hosts"
+        sed -i '/127\.0\.1\.1/d;' /etc/hosts
+        echo "127.0.1.1 $EDGEHOSTNAME" >> /etc/hosts
+        systemctl stop teleport
+        sleep 5
+        rm -rf /var/lib/teleport/*
+        sleep 5
+        systemctl restart teleport
+        rm -rf api-hostname.sh
+      else
+        echo  "connection failed rebooting"
+        sleep 5
+        /sbin/reboot
+      fi
+      sleep 5
+      wget --timeout=1 --tries=2 http://squirrel-operator.difinative.com/jetsonusecase/$MACIDWLAN -O usecase.tar
+      if [ $? == 0 ] ; then
+        echo "extracting usecase files from usecase.tar"
+        tar -xvf /root/usecase.tar
+        if  ls /root/*-uc/usecase.sh 1> /dev/null 2>&1; then
+          echo "Copying issue file to /etc folder"
+          cp /root/*-uc/issue /etc/
+          cp /root/*-uc/usecase.sh /usr/bin/
+          chmod a+x /usr/bin/usecase.sh
+          rm -rf usecase.tar
+          # rm -rf /root/*-uc
+        else
+          echo "No usecase.sh file" 
+          sleep 5
+          /sbin/reboot
+        fi
+      else
+        echo "connection failed rebooting"
+        sleep 5
+        /sbin/reboot
+      fi
+      sleep 5
+      curl http://squirrel-operator.difinative.com/usecase/$MACIDWLAN > /usr/bin/my-usecase.txt
+      Usecasetest=$(cat /usr/bin/my-usecase.txt | grep -o 200 )
+      if [ $Usecasetest == 200 ] ; then
+        sed -i 's/twoboot/usecase/' /var/spool/cron/crontabs/root
+      else
+        echo "error 404" 
+        sleep 5
+        /sbin/reboot
+      fi  
+      touch /var/tmp/twoboot.done
+      sleep 5
+      echo "Rebooting...."
+      /sbin/reboot
+    else
+      echo "oneboot.done not there"
+      sed -i 's/twoboot/oneboot/' /var/spool/cron/crontabs/root
+      /sbin/reboot
+    fi
+    echo "************************************************ Successfully completed twoboot.sh *********************************************************"
+
+# checkMyUsecase script
+  checkMyUsecase.sh: |
+    #!/bin/bash
+    #checkMyUsecase.sh
+    echo "************************************************ Executing checkMyUsecase.sh ********************************************************"
+    USECASE=$(cat /usr/bin/my-usecase.txt | awk -F: '{print $3}' |sed 's/"//g '| sed s/\}//)
+    MACIDWLAN=$(cat /sys/class/net/wlan0/address | sed s/:/-/g)
+    curl http://squirrel-operator.difinative.com/usecase/$MACIDWLAN > /usr/bin/my-new-usecase.txt
+    NEW_USECASE=$(cat /usr/bin/my-new-usecase.txt | awk -F: '{print $3}' |sed 's/"//g '| sed s/\}//)
+    if [[ "$USECASE" == "$NEW_USECASE" ]] ; then
+      echo "No change in usecase"
+    else
+      echo "change in usecase"
+      sed -i 's/checkMyUsecase/oneboot/' /var/spool/cron/crontabs/root
+      echo "updated cron"
+      rm -rf /var/tmp/oneboot.done /var/tmp/twoboot.done
+      rm -rf /usr/bin/my-usecase.txt /usr/bin/my-new-usecase.txt
+      > /etc/issue
+      > /usr/bin/bootlog.txt
+      echo "deleted unwanted files"
+      /root/*-uc/clean-my-usecase.sh
+      rm -rf /root/*-uc
+      echo "**************Setting up jetson with new usecase***********************" >> /usr/bin/bootlog.txt
+      sleep 5
+      /sbin/reboot
+    fi
+    echo "************************************ Successfully completed checkMyUsecase.sh ***************************************************"
+    

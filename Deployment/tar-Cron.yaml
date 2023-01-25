@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+
+kind: CronJob
+metadata:
+  name: tar-zerotouchscirpts
+  namespace: squirrel-operator
+spec:
+  schedule: "*/30 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          automountServiceAccountToken: false
+          containers:
+          - name: tar-zerotouchscirpts
+            image: buildpack-deps:curl
+            imagePullPolicy: Always
+            args:
+            - /bin/sh
+            - -ec
+            - | 
+              curl http://squirrel-operator.difinative.com/tar/raspi -X POST && 
+              curl http://squirrel-operator.difinative.com/tar/jetson -X POST && 
+              curl http://squirrel-operator.difinative.com/tar/usecase/raspi/regular -X POST && 
+              curl http://squirrel-operator.difinative.com/tar/usecase/raspi/football -X POST &&
+              curl http://squirrel-operator.difinative.com/tar/usecase/jetson/regular -X POST && 
+              curl http://squirrel-operator.difinative.com/tar/usecase/jetson/football -X POST
+          restartPolicy: OnFailure

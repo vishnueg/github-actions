@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: initsetupscript-server-config
+  namespace: squirrel-operator
+data:
+  server-config.yaml: |
+    url: "0.0.0.0"
+    port: "8082"
+    queryAssetApi: "https://squirrel.difinative.com/squirrel/admin-app/api/assets?asset_ip="
